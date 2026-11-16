@@ -1,6 +1,6 @@
 // Bump the version whenever you change any app file, so phones pick up the update.
-const CACHE = 'summit-v3';
-const SHELL = ['./', './index.html', './styles.css', './app1.js', './app2.js', './app3.js', './app4.js', './manifest.json', './icon.svg'];
+const CACHE = 'summit-v4';
+const SHELL = ['./', './index.html', './styles.css', './styles2.css', './app1.js', './app2.js', './app3.js', './app4.js', './app5.js', './app6.js', './manifest.json', './icon.svg'];
 const CDN = ['https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js'];
 
 self.addEventListener('install', e => {
