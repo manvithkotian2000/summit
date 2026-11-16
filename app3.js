@@ -1,11 +1,11 @@
-/* Summit app, part 3 of 4: Journey screen (trail, chapter, consistency, trend, wins) */
+/* Summit app, part 3 of 6: Journey screen (trail, chapter, consistency, trend, wins) */
 function metricSeries(){
   const p=S.profile||{},m=p.goal_metric||'weight',map={};
   for(const e of S.entries){
     let v=null;
     if(m==='weight'&&e.type==='Weight')v=Number(e.amount);
     else if(m==='waist'&&e.type==='Measure'&&/waist/i.test(e.details))v=Number(e.amount);
-    else if(m==='lift'&&e.type==='Lift'&&p.goal_exercise&&norm(e.details).includes(norm(p.goal_exercise))&&Number(e.amount)>0)v=e1rm(e.amount,e.data&&e.data.reps);
+    else if(m==='lift'&&e.type==='Lift'&&p.goal_exercise&&norm(e.details).includes(norm(p.goal_exercise))){const b=bestE1rm(liftSets(e));if(b>0)v=b}
     else if(m==='energy'&&e.type==='Energy')v=Number(e.amount);
     if(v==null||isNaN(v)||(m!=='energy'&&!v))continue;
     (map[e.date]=map[e.date]||[]).push(v);
@@ -119,18 +119,32 @@ function drawTrend(J){
     note.textContent=ahead?'You are ahead of the fast edge. Make sure recovery keeps up.':behind?'Just outside the band right now. Your coach adjusts tomorrow\'s plan to bring you back in.':'The blue line is inside the band, which means you are on track.';
   }else note.textContent='Dots are single readings. The blue line is your 7-day average, which smooths out day-to-day noise.';
 }
-function liftRecords(){
+function blockStart(){
+  const t=todayStr(),d=[...new Set(S.entries.filter(e=>e.type==='Lift'&&e.date<=t).map(e=>e.date))].sort();
+  if(!d.length||daysBetween(d[d.length-1],t)>21)return t;
+  let i=d.length-1;while(i>0&&daysBetween(d[i-1],d[i])<=21)i--;
+  return d[i];
+}
+function liftRecords(from){
   const g={};
-  S.entries.forEach(e=>{if(e.type==='Lift'&&Number(e.amount)>0){const k=norm(e.details);(g[k]=g[k]||{name:e.details,list:[]}).list.push({d:e.date,v:e1rm(e.amount,e.data&&e.data.reps),kg:Number(e.amount),reps:e.data&&e.data.reps})}});
+  S.entries.forEach(e=>{
+    if(e.type!=='Lift'||(from&&e.date<from))return;
+    const ls=liftSets(e).filter(s=>s.kg>0);if(!ls.length)return;
+    const top=ls.reduce((a,b)=>e1rm(b.kg,b.reps)>e1rm(a.kg,a.reps)?b:a),k=norm(e.details);
+    (g[k]=g[k]||{name:e.details,list:[]}).list.push({d:e.date,v:e1rm(top.kg,top.reps),kg:top.kg,reps:top.reps});
+  });
   return Object.values(g).map(x=>{x.list.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);const fd=x.list[0].d,first=Math.max(...x.list.filter(y=>y.d===fd).map(y=>y.v)),best=x.list.reduce((a,b)=>b.v>a.v?b:a);
     return {name:x.name,pct:(best.v-first)/first,best,sessions:new Set(x.list.map(y=>y.d)).size}}).filter(x=>x.sessions>=2&&x.pct>.001).sort((a,b)=>b.pct-a.pct).slice(0,6);
 }
 function avgRange(kind,from,to){const v=[];for(let d=from;d<=to;d=addDays(d,1)){const s=dayStats(d);if(kind==='energy'&&s.energy.length)v.push(avg(s.energy));if(kind==='sleep'&&s.sleep)v.push(s.sleep)}return v.length?avg(v):null}
 function renderWins(){
-  const recs=liftRecords(),p=S.profile||{},t=todayStr(),start=p.journey_start||t;
-  let html='<h3>Early wins</h3><p class="small muted">Strength and energy improve weeks before the mirror shows it.</p>';
+  const from=blockStart(),p=S.profile||{},t=todayStr(),start=p.journey_start||t;
+  let recs=liftRecords(from),allTime=false;
+  if(!recs.length){const a=liftRecords('');if(a.length){recs=a;allTime=true}}
+  const firstLift=S.entries.filter(e=>e.type==='Lift').reduce((a,e)=>!a||e.date<a?e.date:a,'');
+  let html='<h3>Strength wins</h3><p class="small muted">'+(allTime?'Across all your training since '+fmtYear(firstLift)+'. Wins from your current run appear after your second session back.':'Since your current run of training began on '+fmtLong(from)+'. Strength improves weeks before the mirror shows it.')+'</p>';
   html+=recs.length?recs.map(r=>`<div class="rec"><b>${esc(r.name)}</b><span class="num pos">+${Math.round(r.pct*100)}%</span><span class="small muted" style="grid-column:1/-1">Best set ${r.best.kg} kg × ${esc(r.best.reps||'?')}, across ${r.sessions} sessions</span><div class="bar"><i style="width:${Math.min(100,r.pct*200)}%"></i></div></div>`).join('')
-    :'<p class="small" style="margin-top:10px">Tick off exercises in the workout log. Your strength records show up here after the second session.</p>';
+    :'<p class="small" style="margin-top:10px">Log your sets in the workout sheet. Your strength records show up here after the second session.</p>';
   if(daysBetween(start,t)>=13){
     const row=(l,x,y,u)=>x!=null&&y!=null?`<div class="rec"><b>${l}</b><span class="num ${y>=x?'pos':''}">${r1(x)} to ${r1(y)}${u}</span><span class="small muted" style="grid-column:1/-1">Your first week compared with this week</span></div>`:'';
     html+=row('Energy',avgRange('energy',start,addDays(start,6)),avgRange('energy',addDays(t,-6),t),'/10')+row('Sleep',avgRange('sleep',start,addDays(start,6)),avgRange('sleep',addDays(t,-6),t),' h');
